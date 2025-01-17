@@ -1,17 +1,29 @@
 import os
-import json
+import openai
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google.cloud import translate_v2 as translate
+import json
 
 # Constants
 SCOPES = ['https://www.googleapis.com/auth/youtube.force-ssl']
-API_KEY = os.getenv('GOOGLE_TRANSLATE_API_KEY')  # Your Translate API key
-TARGET_LANGUAGES = ['es', 'fr', 'de', 'zh', 'hi']  # List of languages to translate to
+VIDEO_ID = os.getenv('MY_VIDEO_ID')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # Store your OpenAI API key in GitHub Secrets or locally
+
+# Target languages and their names for translation
+TARGET_LANGUAGES = {
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'zh': 'Simplified Chinese',
+    'hi': 'Hindi'
+}
+
+# Set OpenAI API key
+openai.api_key = OPENAI_API_KEY
 
 def get_authenticated_service():
-    """Authenticate with YouTube API."""
+    """Authenticate with the YouTube API."""
     creds = None
     try:
         with open('oauth2.json', 'r') as f:
@@ -31,13 +43,19 @@ def get_authenticated_service():
         print(f"Error building service: {e}")
         return None
 
-def translate_text(text, target_language, translate_client):
-    """Translate text using Google Translate API."""
+def translate_with_openai(text, target_language_name):
+    """Translate text using OpenAI."""
     try:
-        result = translate_client.translate(text, target_language=target_language)
-        return result['translatedText']
+        prompt = f"Translate the following text to {target_language_name}:\n\n{text}"
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=prompt,
+            max_tokens=500
+        )
+        translation = response.choices[0].text.strip()
+        return translation
     except Exception as e:
-        print(f"Error translating text: {e}")
+        print(f"Error translating text with OpenAI: {e}")
         return text
 
 def update_video_metadata(youtube, video_id, title, description, language):
@@ -77,8 +95,6 @@ def main():
     if not youtube:
         return
 
-    translate_client = translate.Client(api_key=API_KEY)
-
     print("Fetching videos from your channel...")
     try:
         video_request = youtube.search().list(
@@ -103,12 +119,12 @@ def main():
             original_title = snippet['title']
             original_description = snippet.get('description', '')
 
-            for lang in TARGET_LANGUAGES:
-                translated_title = translate_text(original_title, lang, translate_client)
-                translated_description = translate_text(original_description, lang, translate_client)
+            for lang_code, lang_name in TARGET_LANGUAGES.items():
+                translated_title = translate_with_openai(original_title, lang_name)
+                translated_description = translate_with_openai(original_description, lang_name)
 
                 # Update the metadata
-                update_video_metadata(youtube, video_id, translated_title, translated_description, lang)
+                update_video_metadata(youtube, video_id, translated_title, translated_description, lang_code)
 
     except HttpError as e:
         print(f"An HTTP error occurred: {e.resp.status} {e.content}")
