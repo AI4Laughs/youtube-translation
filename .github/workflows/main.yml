@@ -26,6 +26,13 @@ jobs:
       - name: Create oauth2.json
         run: |
           echo "${{ secrets.OAUTH_JSON }}" > oauth2.json
+          
+      - name: Check oauth2.json content (debug)
+        run: |
+          echo "Checking if oauth2.json exists:"
+          ls -l oauth2.json
+          echo "First few lines of oauth2.json (sanitized):"
+          head -n 1 oauth2.json | sed 's/"access_token":"[^"]*"/"access_token":"REDACTED"/g'
       
       - name: Run Python script
         env:
