@@ -1,40 +1,40 @@
-name: Translate YouTube Metadata with OpenAI
+name: Translate YouTube Metadata
 
 on:
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 12 * * *"  # Runs daily at 12:00 UTC
+    - cron: "0 12 * * *"
 
 jobs:
-  translate-metadata:
+  translate:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.x"
-      
+          
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth google-auth-oauthlib openai
-      
+          
+      - name: Debug Environment
+        run: |
+          echo "Checking for required files..."
+          ls -la
+          echo "Python version:"
+          python --version
+          
       - name: Create oauth2.json
         run: |
           echo "${{ secrets.OAUTH_JSON }}" > oauth2.json
-          
-      - name: Check oauth2.json content (debug)
-        run: |
-          echo "Checking if oauth2.json exists:"
+          echo "Created oauth2.json with size:"
           ls -l oauth2.json
-          echo "First few lines of oauth2.json (sanitized):"
-          head -n 1 oauth2.json | sed 's/"access_token":"[^"]*"/"access_token":"REDACTED"/g'
-      
-      - name: Run Python script
+          
+      - name: Run translator
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MY_VIDEO_ID: ${{ secrets.MY_VIDEO_ID }}
