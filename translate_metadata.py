@@ -12,192 +12,141 @@ SCOPES = [
     'https://www.googleapis.com/auth/youtube.force-ssl',
     'https://www.googleapis.com/auth/youtube'
 ]
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Get environment variables with validation
 VIDEO_ID = os.getenv('MY_VIDEO_ID')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Print environment variable status (sanitized)
+print(f"VIDEO_ID present: {bool(VIDEO_ID)}")
+print(f"OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
+print(f"Working with video ID: {VIDEO_ID}")
+
+# Set OpenAI key
+openai.api_key = OPENAI_API_KEY
+
 LANGUAGES = {
     'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'zh': 'Chinese',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'ru': 'Russian'
+    'fr': 'French'  # Reduced list for testing
 }
 
-def log_debug(message, data=None):
-    """Log debug information with timestamp."""
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"\n[{timestamp}] {message}")
-    if data:
-        try:
-            print(f"Data: {json.dumps(data, indent=2, ensure_ascii=False)}")
-        except:
-            print(f"Data: {str(data)}")
-
-def test_apis():
-    """Test both OpenAI and YouTube APIs."""
-    log_debug("Testing OpenAI API...")
+def translate_text(text, target_language):
+    """Translate text with explicit logging."""
+    print(f"\n🔄 Attempting translation to {target_language}")
+    print(f"Input text: {text[:100]}...")  # Show first 100 chars
+    
     try:
-        openai.api_key = OPENAI_API_KEY
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a translator."},
-                {"role": "user", "content": "Test message: Hello"}
-            ]
+                {"role": "system", "content": f"You are a translator. Translate to {target_language}."},
+                {"role": "user", "content": text}
+            ],
+            temperature=0.3
         )
-        log_debug("OpenAI API test successful", {
-            "response": response['choices'][0]['message']['content']
-        })
+        translated = response['choices'][0]['message']['content'].strip()
+        print(f"✓ Translation successful. Result: {translated[:100]}...")
+        return translated
     except Exception as e:
-        log_debug("OpenAI API test failed", {"error": str(e)})
-        return False
-    return True
+        print(f"✗ Translation failed: {str(e)}")
+        return None
 
-def get_authenticated_service():
-    """Get authenticated YouTube service with detailed logging."""
-    log_debug("Starting YouTube authentication")
-    
+def main():
+    print("\n=== Starting YouTube Translation Script ===\n")
+
+    # 1. Validate environment variables
+    if not all([VIDEO_ID, OPENAI_API_KEY]):
+        print("❌ Missing required environment variables!")
+        print(f"VIDEO_ID present: {bool(VIDEO_ID)}")
+        print(f"OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
+        return
+
+    # 2. Test OpenAI API
+    print("\n🔍 Testing OpenAI API...")
+    try:
+        test_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Translate this test to Spanish: Hello"}]
+        )
+        print("✓ OpenAI API test successful")
+    except Exception as e:
+        print(f"❌ OpenAI API test failed: {str(e)}")
+        return
+
+    # 3. Setup YouTube API
+    print("\n🔍 Setting up YouTube API...")
     try:
         with open('oauth2.json', 'r') as f:
             creds_data = json.load(f)
-            log_debug("OAuth credentials loaded", {
-                "has_token": bool(creds_data.get("token")),
-                "has_refresh_token": bool(creds_data.get("refresh_token")),
-                "scopes": creds_data.get("scopes")
-            })
-    except Exception as e:
-        log_debug("Failed to load oauth2.json", {"error": str(e)})
-        return None
-
-    try:
         creds = Credentials.from_authorized_user_info(creds_data, SCOPES)
-        
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                log_debug("Refreshing expired credentials")
-                creds.refresh(Request())
-            else:
-                log_debug("Invalid credentials state")
-                return None
-        
         youtube = build('youtube', 'v3', credentials=creds)
-        log_debug("YouTube service built successfully")
-        
-        # Test the service
-        test_response = youtube.videos().list(
-            part="snippet",
-            id=VIDEO_ID
-        ).execute()
-        
-        if test_response.get('items'):
-            log_debug("YouTube API test successful", {
-                "video_title": test_response['items'][0]['snippet']['title']
-            })
-        else:
-            log_debug("YouTube API test failed - No video found")
-            return None
-            
-        return youtube
+        print("✓ YouTube API setup successful")
     except Exception as e:
-        log_debug("Error in YouTube authentication", {"error": str(e)})
-        return None
-
-def translate_and_update():
-    """Main translation and update logic with detailed logging."""
-    if not all([VIDEO_ID, OPENAI_API_KEY]):
-        log_debug("Missing required environment variables", {
-            "has_video_id": bool(VIDEO_ID),
-            "has_openai_key": bool(OPENAI_API_KEY)
-        })
+        print(f"❌ YouTube API setup failed: {str(e)}")
         return
 
-    log_debug("Starting translation process", {"video_id": VIDEO_ID})
-
-    # Test APIs first
-    if not test_apis():
-        log_debug("API tests failed")
-        return
-
-    youtube = get_authenticated_service()
-    if not youtube:
-        log_debug("Failed to get YouTube service")
-        return
-
+    # 4. Get video details
+    print("\n📺 Fetching video details...")
     try:
-        # Get video details
         video_response = youtube.videos().list(
             part="snippet,localizations",
             id=VIDEO_ID
         ).execute()
 
         if not video_response.get('items'):
-            log_debug("Video not found")
+            print(f"❌ Video not found: {VIDEO_ID}")
             return
 
         video = video_response['items'][0]
         snippet = video['snippet']
-        log_debug("Retrieved video details", {
-            "title": snippet['title'],
-            "description_length": len(snippet['description'])
-        })
+        title = snippet['title']
+        description = snippet['description']
 
-        # Perform translations
-        translations = {}
-        for lang_code, lang_name in LANGUAGES.items():
-            log_debug(f"Translating to {lang_name}")
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": f"Translate to {lang_name}:"},
-                        {"role": "user", "content": snippet['title']}
-                    ]
-                )
-                translated_title = response['choices'][0]['message']['content']
-                
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": f"Translate to {lang_name}:"},
-                        {"role": "user", "content": snippet['description']}
-                    ]
-                )
-                translated_desc = response['choices'][0]['message']['content']
-                
-                translations[lang_code] = {
-                    'title': translated_title,
-                    'description': translated_desc
-                }
-                log_debug(f"Translation completed for {lang_name}", {
-                    "title": translated_title[:50] + "..."
-                })
-            except Exception as e:
-                log_debug(f"Translation failed for {lang_name}", {"error": str(e)})
-
-        # Update video with translations
-        if translations:
-            log_debug("Updating video with translations", {
-                "languages": list(translations.keys())
-            })
-            try:
-                update_response = youtube.videos().update(
-                    part="localizations",
-                    body={
-                        "id": VIDEO_ID,
-                        "localizations": translations
-                    }
-                ).execute()
-                log_debug("Update successful", {"response": update_response})
-            except Exception as e:
-                log_debug("Update failed", {"error": str(e)})
-        else:
-            log_debug("No translations to update")
-
+        print(f"✓ Found video: {title}")
     except Exception as e:
-        log_debug("Process failed", {"error": str(e)})
+        print(f"❌ Failed to fetch video: {str(e)}")
+        return
+
+    # 5. Perform translations
+    print("\n🌍 Starting translations...")
+    translations = {}
+    
+    for lang_code, lang_name in LANGUAGES.items():
+        print(f"\nTranslating to {lang_name}...")
+        
+        # Translate title
+        translated_title = translate_text(title, lang_name)
+        if not translated_title:
+            continue
+            
+        # Translate description
+        translated_description = translate_text(description, lang_name)
+        if not translated_description:
+            continue
+
+        translations[lang_code] = {
+            'title': translated_title,
+            'description': translated_description
+        }
+        print(f"✓ {lang_name} translations completed")
+
+    # 6. Update video
+    if translations:
+        print("\n📝 Updating video with translations...")
+        try:
+            update_response = youtube.videos().update(
+                part="localizations",
+                body={
+                    "id": VIDEO_ID,
+                    "localizations": translations
+                }
+            ).execute()
+            print("✓ Video updated successfully!")
+            print(f"Updated languages: {', '.join(translations.keys())}")
+        except Exception as e:
+            print(f"❌ Failed to update video: {str(e)}")
+    else:
+        print("\n❌ No translations to update")
 
 if __name__ == "__main__":
-    translate_and_update()
+    main()
