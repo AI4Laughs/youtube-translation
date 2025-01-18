@@ -4,7 +4,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-import openai
+from openai import OpenAI
 from datetime import datetime
 
 # Constants
@@ -17,17 +17,24 @@ SCOPES = [
 VIDEO_ID = os.getenv('MY_VIDEO_ID')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
+# Initialize OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 # Print environment variable status (sanitized)
 print(f"VIDEO_ID present: {bool(VIDEO_ID)}")
 print(f"OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
 print(f"Working with video ID: {VIDEO_ID}")
 
-# Set OpenAI key
-openai.api_key = OPENAI_API_KEY
-
 LANGUAGES = {
     'es': 'Spanish',
-    'fr': 'French'  # Reduced list for testing
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'ru': 'Russian'
 }
 
 def translate_text(text, target_language):
@@ -36,7 +43,7 @@ def translate_text(text, target_language):
     print(f"Input text: {text[:100]}...")  # Show first 100 chars
     
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"You are a translator. Translate to {target_language}."},
@@ -44,7 +51,7 @@ def translate_text(text, target_language):
             ],
             temperature=0.3
         )
-        translated = response['choices'][0]['message']['content'].strip()
+        translated = response.choices[0].message.content.strip()
         print(f"✓ Translation successful. Result: {translated[:100]}...")
         return translated
     except Exception as e:
@@ -64,11 +71,11 @@ def main():
     # 2. Test OpenAI API
     print("\n🔍 Testing OpenAI API...")
     try:
-        test_response = openai.ChatCompletion.create(
+        test_response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "Translate this test to Spanish: Hello"}]
         )
-        print("✓ OpenAI API test successful")
+        print(f"✓ OpenAI API test successful: {test_response.choices[0].message.content}")
     except Exception as e:
         print(f"❌ OpenAI API test failed: {str(e)}")
         return
