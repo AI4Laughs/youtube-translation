@@ -21,17 +21,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth google-auth-oauthlib openai
           
-      - name: Debug Environment
+      - name: Verify Environment
         run: |
-          echo "Checking for required files..."
-          ls -la
           echo "Python version:"
           python --version
+          echo "Checking for video ID (sanitized):"
+          echo "Has VIDEO_ID: ${{ secrets.MY_VIDEO_ID != '' }}"
+          echo "Has OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}"
           
       - name: Create oauth2.json
         run: |
           echo "${{ secrets.OAUTH_JSON }}" > oauth2.json
-          echo "Created oauth2.json with size:"
+          echo "oauth2.json created with size:"
           ls -l oauth2.json
           
       - name: Run translator
